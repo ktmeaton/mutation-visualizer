@@ -1,0 +1,29 @@
+[package]
+name = "mutation-visualizer-cli"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[features]
+default = []
+
+[dependencies]
+chrono              = { workspace = true }
+clap                = { workspace = true }
+color-eyre          = { workspace = true }
+env_logger          = { workspace = true }
+log                 = { workspace = true }
+mutation-visualizer = { default-features = false, path = "../mutation-visualizer" }
+serde               = { workspace = true }
+strum               = { workspace = true }
+strum_macros        = { workspace = true }
+tokio               = { workspace = true }
+
+[profile.dev]
+opt-level = 3
+
+[profile.release]
+strip = true # Strip symbols from binary
+lto   = true # Enable Link Time Optimization (LTO)
+codegen-units = 1 # Reduce parallele Code generation units to increase optimization

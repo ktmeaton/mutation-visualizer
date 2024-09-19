@@ -1,0 +1,20 @@
+[package]
+name = "mutation-visualizer"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[features]
+default = []
+
+[dependencies]
+clap       = { workspace = true }
+color-eyre = { workspace = true }
+datafusion = { workspace = true }
+log        = { workspace = true }
+serde      = { workspace = true }
+strum      = { workspace = true }
+strum_macros = { workspace = true }
+thiserror  = { workspace = true }
+tokio      = { workspace = true }
