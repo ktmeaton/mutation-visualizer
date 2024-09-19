@@ -11,6 +11,7 @@ rust-version = "1.81.0"
 version = "0.1.0"
 
 [workspace.dependencies]
+arrow        = { version = "53", default-features = false }
 chrono       = { version = "0.4",    default-features = false, features = ["clock", "serde"] }
 clap         = { version = "4.5.17", default-features = true, features = [ "derive", "string"] }
 datafusion   = { version = "42",     default-features = false }

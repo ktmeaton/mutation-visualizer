@@ -1,6 +1,7 @@
 use clap::Parser;
 use color_eyre::eyre::{eyre, Report, Result};
 use datafusion::prelude::*;
+use datafusion::common::arrow::record_batch::RecordBatch;
 use log;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -74,12 +75,14 @@ pub async fn annotate(args: &AnnotateArgs) -> Result<(), Report> {
     // Read in the file as a dataframe
     let df = ctx.read_csv(&annotations_path, read_options).await?;
 
-    // // execute the plan
-    // let results: Vec<RecordBatch> = df.collect().await?;
+    // execute the plan
+    let results: Vec<RecordBatch> = df.collect().await?;
 
-    // // format the results
-    // let pretty_results = arrow::util::pretty::pretty_format_batches(&results)?
-    // .to_string();
+    // format the results
+    let pretty_results = arrow::util::pretty::pretty_format_batches(&results)?
+    .to_string();
+
+    println!("{pretty_results}");
     
     Ok(())
 }

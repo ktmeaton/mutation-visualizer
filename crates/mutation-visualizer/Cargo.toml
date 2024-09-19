@@ -9,6 +9,7 @@ version.workspace = true
 default = []
 
 [dependencies]
+arrow      = { workspace = true }
 clap       = { workspace = true }
 color-eyre = { workspace = true }
 datafusion = { workspace = true }
