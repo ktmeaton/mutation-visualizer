@@ -1,11 +1,13 @@
+use arrow::array::StringArray;
+use arrow::util::pretty::pretty_format_batches;
 use clap::Parser;
 use color_eyre::eyre::{eyre, Report, Result};
 use datafusion::prelude::*;
-use datafusion::common::arrow::record_batch::RecordBatch;
 use log;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
-use std::ffi::OsStr;
+use std::path::PathBuf;
+
+use crate::register_csv;
 
 /// ---------------------------------------------------------------------------
 /// RunArgs
@@ -37,52 +39,78 @@ pub struct AnnotateArgs {
 
 /// Run annotation
 pub async fn annotate(args: &AnnotateArgs) -> Result<(), Report> {
-    log::info!("Annotate.");
+    log::info!("Beginning annotation.");
 
-    // Start a new datafusion session
+    // Start a new datafusion session for reading and querying tables
     let ctx = SessionContext::new();
 
-    log::debug!("Parsing annotations file path: {:?}", &args.annotations);
-    // Convert our annotations file path from a `PathBuf` to a plain String
-    // with error handling. This is necessary because Operating System
-    // strings can have wild exceptions.
-    let annotations_path = args.annotations.to_str()
-        .ok_or(eyre!("Failed to parse annotations file path: {:?}", args.annotations))?
-        .to_string();
+    // Don't use a hard-coded delimiter, dynamically detect based on file extension
+    let delimiter = None;
 
-    // Parse the file extension ('tsv', 'csv', etc.))
-    log::debug!("Parsing annotations file extension: {:?}", &args.annotations);
-    let annotations_ext = args.annotations.extension()
-        .and_then(|p| p.to_str())
-        .ok_or(eyre!("Failed to parse annotations file extension: {:?}", args.annotations))?
-        .to_string();
+    // Parse the annotations file into a dataframe that is registered to accept SQL queries.
+    log::info!("Reading annotations file: {:?}", &args.annotations);
+    let path = &args.annotations;
+    let name = "annotations";
+    let ctx  = register_csv(path, ctx, name, delimiter).await?;
 
-    // Identify the delimiter based on the file extension (comma or tab separated).
-    log::debug!("Parsing annotations file delimiter: {:?}", &args.annotations);
-    let annotations_delimiter = match annotations_ext.as_str() {
-        "csv" => {
-            log::warn!("File is assumed to be comma delimited.");
-            b','
-        },
-        _     => {
-            log::warn!("File is assumed to be tab delimited.");
-            b'\t'
-        },
-    };
+    // Select the annotations table, check to make sure there are records, and display a preview.
+    let df = ctx.sql("SELECT * FROM annotations").await?;
 
-    // Configure out table reading options
-    let read_options = CsvReadOptions{ delimiter: annotations_delimiter, ..Default::default()};
-    // Read in the file as a dataframe
-    let df = ctx.read_csv(&annotations_path, read_options).await?;
+    // Grab the first 10 records (or less)
+    let preview = df.limit(0, Some(10))?.collect().await?;
 
-    // execute the plan
-    let results: Vec<RecordBatch> = df.collect().await?;
+    // Check that the table is not empty
+    if preview.len() == 0 { 
+        return Err(eyre!("No annotations were found in file: {:?}", &args.annotations)) 
+    }
 
-    // format the results
-    let pretty_results = arrow::util::pretty::pretty_format_batches(&results)?
-    .to_string();
+    // Display records as a preview
+    log::info!("Annotation table preview:\n{}", pretty_format_batches(&preview)?.to_string());
 
-    println!("{pretty_results}");
+    // Identify the columns in nextclade that we should search for mutations.
+    let batches = ctx.sql("SELECT nextclade_column FROM annotations").await?.collect().await?;
+    // Convert the data in the table from arrow format (StringArray) to a plain list of strings.
+    let mut column_names: Vec<&str> = batches
+        .iter()
+        .filter_map(|batch| batch.column(0).as_any().downcast_ref::<StringArray>())
+        .flat_map(|x| x.iter().filter_map(|s| s).collect::<Vec<_>>())
+        .collect();
+    // Dedeuplicate
+    column_names.sort();
+    column_names.dedup();
+
+    if let Some(nextclade) = &args.nextclade {
+        log::info!("Reading nextclade file: {:?}", nextclade);
+        let path = nextclade;
+        let name = "nextclade";
+        let ctx = register_csv(path, ctx, name, delimiter).await?;
+        // Select the nextclade table, check to make sure there are records, and display a preview.
+        let df = ctx.sql("SELECT * FROM nextclade").await?;
+
+        // Grab the first 10 records (or less)
+        let preview = df.limit(0, Some(10))?.collect().await?;
+
+        // Check that the table is not empty
+        if preview.len() == 0 { 
+            return Err(eyre!("No nextclade records were found in file: {:?}", &args.nextclade))
+        }
+
+        // Extract the sample IDs and mutations
+        for col in column_names {
+            log::info!("col: {col}");
+            let batches = ctx.sql(&format!("SELECT nextclade.\"seqName\",nextclade.\"{col}\" FROM nextclade")).await?.collect().await?;
+            println!("{}", pretty_format_batches(&batches).unwrap().to_string());
+        }
+
+        // column_names.iter().map(|col| async move {
+        //     log::info!("col: {col}");
+        //     let df = ctx.sql("SELECT seqName,{col} FROM nextclade").await.unwrap().collect().await().unwrap();
+        //     println!("{}", pretty_format_batches(&df).unwrap().to_string());
+        // });
+    }
+        
+
+    //annotations.join(annotations_2, join_keys=(["customer_id"], ["id"]), how="left")
     
     Ok(())
 }

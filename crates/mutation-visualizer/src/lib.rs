@@ -1,9 +1,11 @@
 use color_eyre::eyre::{eyre, Report, Result};
 use color_eyre::Help;
 use clap::ValueEnum;
+use datafusion::prelude::*;
 use log::LevelFilter;
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use strum_macros::EnumIter;
 use strum::IntoEnumIterator;
@@ -76,3 +78,47 @@ impl FromStr for Verbosity {
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 #[error("Verbosity level {0} is unknown.")]
 pub struct UnknownVerbosityError(pub String);
+
+/// Light wrapper around datafusions register_csv function.
+pub async fn register_csv<P,N>(path: &P, ctx: SessionContext, name: N, delimiter: Option<u8>) -> Result<SessionContext, Report>
+where
+    P: AsRef<Path> + std::fmt::Debug,
+    N: Into<String>,
+{
+    log::debug!("Parsing file path: {:?}", path);
+
+    // Datafusion has very specific requires about what format the input path can be.
+    // The easiest is to convert it into a plain String.
+
+    // Step 1. Convert from generic <P> to an owned PathBuf. This gives us a unified
+    //         way to convert it ot a plain String.
+    let path: PathBuf = path.as_ref().into();
+
+    // Step 2. Parse the file extension ('tsv', 'csv', etc.))
+    let ext = path.extension()
+        .and_then(|p| p.to_str())
+        .ok_or(eyre!("Failed to parse file extension: {:?}", path))?
+        .to_string();
+
+    // Step 3. Convert PathBuf to String to make Datafusion happy.
+    let path = path
+        .to_str()
+        .ok_or(eyre!("Failed to parse file path: {:?}", path))?
+        .to_string();
+
+    // Step 4. Identify the delimiter if it was not supplied.
+    let delimiter = match delimiter {
+        Some(d) => d,
+        None    => match ext.as_str() {
+            "csv" => { log::debug!("File is assumed to be comma delimited."); b','  },
+            _     => { log::debug!("File is assumed to be tab delimited.");   b'\t' },
+        },
+    };
+
+    // Configure out table reading options
+    let read_options = CsvReadOptions::new().file_extension(&ext).delimiter(delimiter);
+    let name: String = name.into();
+    ctx.register_csv(&name, &path, read_options).await?;
+
+    Ok(ctx)
+}
