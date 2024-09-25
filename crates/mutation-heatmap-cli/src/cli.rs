@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand };
-use mutation_visualizer::{AnnotateArgs, Verbosity};
+use mutation_heatmap::{AnnotateArgs, PlotArgs, Verbosity};
 use serde::{Deserialize, Serialize};
 
 /// The command-line interface (CLI).
@@ -47,4 +47,7 @@ pub enum Command {
     /// ```
     #[clap(about = "Annotate mutations.")]
     Annotate(AnnotateArgs),
+
+    #[clap(about = "Plot mutations.")]
+    Plot(PlotArgs),
 }

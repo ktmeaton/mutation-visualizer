@@ -2,8 +2,8 @@ use chrono::Local;
 use clap::Parser;
 use color_eyre::eyre::{Report, Result};
 use env_logger::Builder;
-use mutation_visualizer::{annotate};
-use mutation_visualizer_cli::{Cli, Command};
+use mutation_heatmap::{annotate, plot};
+use mutation_heatmap_cli::{Cli, Command};
 use std::io::Write;
 
 #[tokio::main]
@@ -30,8 +30,8 @@ async fn main() -> Result<(), Report> {
 
     // check which CLI command we're running (dataset, run, plot)
     match args.command {
-        // Annotate
-        Command::Annotate(args) => annotate(&args).await?,  
+        Command::Annotate(args) => annotate(&args).await?,
+        Command::Plot(args)     => plot(&args)?,
     }
 
     Ok(())

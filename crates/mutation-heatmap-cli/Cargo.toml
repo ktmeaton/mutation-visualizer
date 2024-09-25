@@ -1,5 +1,5 @@
 [package]
-name = "mutation-visualizer-cli"
+name = "mutation-heatmap-cli"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
@@ -14,7 +14,7 @@ clap                = { workspace = true }
 color-eyre          = { workspace = true }
 env_logger          = { workspace = true }
 log                 = { workspace = true }
-mutation-visualizer = { default-features = false, path = "../mutation-visualizer" }
+mutation-heatmap    = { default-features = false, path = "../mutation-heatmap" }
 serde               = { workspace = true }
 strum               = { workspace = true }
 strum_macros        = { workspace = true }

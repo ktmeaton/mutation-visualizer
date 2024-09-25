@@ -100,6 +100,7 @@ pub async fn annotate(args: &AnnotateArgs) -> Result<(), Report> {
             log::info!("col: {col}");
             let batches = ctx.sql(&format!("SELECT nextclade.\"seqName\",nextclade.\"{col}\" FROM nextclade")).await?.collect().await?;
             println!("{}", pretty_format_batches(&batches).unwrap().to_string());
+            break;
         }
 
         // column_names.iter().map(|col| async move {
