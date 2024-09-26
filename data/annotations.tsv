@@ -1,0 +1,15 @@
+mutation	column	start	stop	priority	citation	order
+C241T	substitutions	241	241	1	Author A et al. (XXXX) Excellent science paper.	1
+G9267T	substitutions	9267	9267	1	Author A et al. (XXXX) Excellent science paper.	2
+E:T9I	aaSubstitutions	26269	26271	1	Author A et al. (XXXX) Excellent science paper.	3
+ORF1a:S3001I	aaSubstitutions	9266	9268	1	Author A et al. (XXXX) Excellent science paper.	4
+6863-6865	deletions	6863	6865	1	Author B et al. (XXXX) More Excellent science.	5
+28933:T	insertions	28933	28933	2	Author B et al. (XXXX) More Excellent science.	6
+6513-6515	deletions	6513	6515	2	Author B et al. (XXXX) More Excellent science.	7
+ORF1a:4082-4401	frameShifts	12509	13468	2	Author B et al. (XXXX) More Excellent science.	8
+N:221-298	frameShifts	28934	29167	2	Author B et al. (XXXX) More Excellent science.	9
+N:368-371	frameShifts	29375	29386	2	Author B et al. (XXXX) More Excellent science.	10
+S:*	substitutions	21563	25384	2	Author B et al. (XXXX) More Excellent science.	11
+A1T	substitutions	1	10	3	Missing data test 1.	12
+3900-4000	deletions	3900	4000	3	Missing data test 2.	13
+4800-4900	deletions	4800	4900	3	Missing data test 3.	13

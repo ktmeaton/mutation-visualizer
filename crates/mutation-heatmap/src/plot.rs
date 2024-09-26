@@ -2,10 +2,12 @@ use clap::Parser;
 use color_eyre::eyre::{eyre, Result, Report};
 use serde::{Deserialize, Serialize};
 use svg::Document;
-use svg::node::element::{Path, Group, Text, Style, Image, LinearGradient, Stop};
+use svg::node::element::{Path, Group, Text, Style};
 use svg::node::element::path::Data;
 use base64::prelude::*;
 use rand::Rng;
+use resvg::tiny_skia::Pixmap;
+use tiny_skia_path;
 use usvg;
 
 /// Roboto provided is provided within the application (vendored).
@@ -14,7 +16,14 @@ pub const FONT: &[u8] = include_bytes!("../../../assets/fonts/roboto/Roboto-Regu
 
 /// Detect recombination in a dataset population and/or input alignment.
 #[derive(Clone, Debug, Deserialize, Serialize, Parser)]
-pub struct PlotArgs {}
+pub struct PlotArgs {
+
+    /// Output file prefix.
+    #[clap(help = "Output file prefix.")]
+    #[clap(long)]
+    pub prefix: String,
+
+}
 
 pub fn plot(args: &PlotArgs) -> Result<(), Report>{
 
@@ -73,8 +82,6 @@ pub fn plot(args: &PlotArgs) -> Result<(), Report>{
     // stress testing
     // let mutations: Vec<_> = (0..100).map(|i| format!("Mutation{i}")).collect();
 
-    let legend_labels = vec!["1.0", "0.75", "0.50", "0.25", "0.0"];
-
     // ------------------------------------------------------------------------
     // Text Calculation: Largest Labels
 
@@ -94,13 +101,7 @@ pub fn plot(args: &PlotArgs) -> Result<(), Report>{
     // Figure out which the maximum width and height of the mutation labels.
     let mutation_font_size = font_size;
     // Reversing height and width, because we're going to rotate these labels 90 degrees
-    let (mutation_height, mutation_width) = largest_text(&mutations, FONT_FAMILY, mutation_font_size, &opt)?;
-
-    log::debug!("Calculating largest mutation label.");
-
-    // Figure out which the maximum width and height of the legend labels.
-    let legend_tick_font_size = font_size / 2.0;
-    let (legend_tick_width, legend_tick_height) = largest_text(&legend_labels, FONT_FAMILY, legend_tick_font_size, &opt)?;
+    let (mutation_height, _mutation_width) = largest_text(&mutations, FONT_FAMILY, mutation_font_size, &opt)?;
 
     // ------------------------------------------------------------------------
     // Y Axis: Sample Labels
@@ -180,7 +181,7 @@ pub fn plot(args: &PlotArgs) -> Result<(), Report>{
 
     let mut x = 0;
     // Iterate through mutations ( Moving Left -> Right along the X-Axis)
-    for (i, mutation) in mutations.iter().enumerate() {
+    for (i, _mutation) in mutations.iter().enumerate() {
         let mut y = 0;
         if i > 0 { x += unit + padding; }
         // Iterate through samples ( Moving Top -> Down along the Y-Axis)
@@ -203,52 +204,6 @@ pub fn plot(args: &PlotArgs) -> Result<(), Report>{
     let mutation_boxes_w = (mutations.len() as u32 * unit) + ((mutations.len() - 1) as u32 * padding);
     let mutation_boxes_h = (samples.len() as u32 * unit) + ((samples.len() - 1) as u32 * padding);
 
-    // ------------------------------------------------------------------------
-    // Legend
-
-    log::debug!("Drawing legend.");
-
-    let legend_x = mutation_boxes_x + mutation_boxes_w + unit;
-    let legend_y = mutation_boxes_y;
-    let mut legend = Group::new().set("transform", format!("translate({legend_x} {legend_y})"));
-    
-    let mut legend_gradient = LinearGradient::new().set("id", "legend_gradient").set("gradientTransform", "rotate(90)");
-
-    // These values should be reversed, todo!() to get the gradient to rotate properly.
-    legend_gradient = legend_gradient.add(Stop::new().set("offset", "0%").set("stop-color", "purple"));    
-    legend_gradient = legend_gradient.add(Stop::new().set("offset", "50%").set("stop-color", "pink"));
-    legend_gradient = legend_gradient.add(Stop::new().set("offset", "100%").set("stop-color", "white"));    
-
-    let legend_box_h = (unit * 5) + (padding * 4);
-
-    let legend_box_coords = Data::new().move_to((0, 0)).line_by((0, legend_box_h)).line_by((unit, 0)).line_by((0, -(legend_box_h as i32))).close();
-    //let legend_box_coords = Data::new().move_to((0, legend_box_h)).line_by((0, -(legend_box_h as i32))).line_by((unit, 0)).line_by((0, legend_box_h)).close();
-    let legend_box = Path::new().set("fill", "url('#legend_gradient')").set("stroke", "black").set("stroke-width", stroke).set("d", legend_box_coords);
-    legend = legend.add(legend_box);
-
-    // Text labels
-    let legend_labels = vec!["1.0", "0.75", "0.50", "0.25", "0.0"];
-    let x = unit;
-    let mut y = 0;
-    for (i, label) in legend_labels.iter().enumerate() {
-        if i > 0 { y += legend_box_h / (legend_labels.len() - 1) as u32}
-
-        // Draw the horizontal tick
-        let tick_coords = Data::new().move_to((x, y)).line_by((tick_length, 0));        
-        let tick = Path::new().set("stroke", "black").set("stroke-width", stroke).set("d",tick_coords);
-        legend = legend.add(tick);  
-        
-        // Draw the tick text
-        let tick_text_x = x + tick_length + padding;
-        let tick_text = Text::new(label.to_string())
-            .set("font-size", format!("{legend_tick_font_size}px"))
-            .set("font-family", FONT_FAMILY)
-            .set("dominant-baseline", "central")
-            .set("text-anchor", "start")
-            .set("transform", format!("translate({tick_text_x} {y})"));
-        legend = legend.add(tick_text); 
-    }
-
 
     // ------------------------------------------------------------------------
     // Render
@@ -257,7 +212,7 @@ pub fn plot(args: &PlotArgs) -> Result<(), Report>{
 
     let style = Style::new(font_css);
 
-    let document_width = legend_x + unit + tick_length + padding + legend_tick_width + unit;
+    let document_width = mutation_boxes_x + mutation_boxes_w + unit;
     let document_height = mutation_boxes_y + mutation_boxes_h + unit;
 
     let background_coords = Data::new().move_to((0, 0)).line_by((0, document_height)).line_by((document_width, 0)).line_by((0, -(document_height as i32))).close();
@@ -269,15 +224,22 @@ pub fn plot(args: &PlotArgs) -> Result<(), Report>{
         .add(style)
         .add(sample_axis)
         .add(mutation_axis)
-        .add(mutation_boxes)
-        .add(legend)
-        .add(legend_gradient);
+        .add(mutation_boxes);
 
-    svg::save("image.svg", &document).unwrap();
+    // Render to vector graphics (svg)
+    svg::save(format!("{}.svg", &args.prefix), &document)?;
+    // Render to pixels (png)
+    let tree = usvg::Tree::from_str(&document.to_string(), &opt)?;
+    let transform = tiny_skia_path::Transform::default();
+    let mut pixmap = Pixmap::new(document_width, document_height).ok_or(eyre!("Failed to create png pixel map: {document_width}x{document_height}"))?;
+    resvg::render(&tree, transform, &mut pixmap.as_mut());
+    pixmap.save_png(format!("{}.png", &args.prefix))?;
+
 
     Ok(())
 }
 
+/// Given a list of strings, calculate the maximum width and height needed to accomodate them.
 pub fn largest_text<T>(labels: &[T], font_family: &str, font_size: f32, opt: &usvg::Options) -> Result<(u32, u32), Report> 
 where
     T: AsRef<str> + std::fmt::Display

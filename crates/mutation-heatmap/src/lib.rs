@@ -80,11 +80,41 @@ impl FromStr for Verbosity {
 #[error("Verbosity level {0} is unknown.")]
 pub struct UnknownVerbosityError(pub String);
 
-/// Light wrapper around datafusions register_csv function.
-pub async fn register_csv<P,N>(path: &P, ctx: SessionContext, name: N, delimiter: Option<u8>) -> Result<SessionContext, Report>
+
+/// Light wrapper around datafusions register_csv.
+pub async fn register_csv<P,N>(path: &P, ctx: SessionContext, delimiter: Option<u8>, name: N) -> Result<SessionContext, Report>
 where
     P: AsRef<Path> + std::fmt::Debug,
-    N: Into<String>,
+    N: ToString,
+{
+    // Convert the csv path to a plain string, and identify the extension and delimiter
+    // This is needed to make datafusion happy.
+    let (path, ext, delimiter) = parse_csv_path(path, delimiter)?;
+    // Use our dynamically detected extensions and delimiter to configure the reader
+    let read_options = CsvReadOptions::new().file_extension(&ext).delimiter(delimiter);  
+    // Register the csv as dataframe that can accept SQL queries.
+    ctx.register_csv(&name.to_string(), &path, read_options).await?;
+    Ok(ctx)
+}
+
+/// Light wrapper around datafusions read_csv.
+pub async fn read_csv<P>(path: &P, ctx: &SessionContext, delimiter: Option<u8>) -> Result<DataFrame, Report>
+where
+    P: AsRef<Path> + std::fmt::Debug,
+{
+    // Convert the csv path to a plain string, and identify the extension and delimiter
+    // This is needed to make datafusion happy.
+    let (path, ext, delimiter) = parse_csv_path(path, delimiter)?;
+    // Use our dynamically detected extensions and delimiter to configure the reader
+    let read_options = CsvReadOptions::new().file_extension(&ext).delimiter(delimiter);  
+    // Register the csv as dataframe that can accept SQL queries.
+    let df = ctx.read_csv(path, read_options).await?;
+    Ok(df)
+}
+
+pub fn parse_csv_path<P>(path: P, delimiter: Option<u8>) -> Result<(String, String, u8), Report>
+where
+    P: AsRef<Path> + std::fmt::Debug
 {
     log::debug!("Parsing file path: {:?}", path);
 
@@ -116,10 +146,5 @@ where
         },
     };
 
-    // Configure out table reading options
-    let read_options = CsvReadOptions::new().file_extension(&ext).delimiter(delimiter);
-    let name: String = name.into();
-    ctx.register_csv(&name, &path, read_options).await?;
-
-    Ok(ctx)
+    Ok((path, ext, delimiter))
 }
