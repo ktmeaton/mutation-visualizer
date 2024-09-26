@@ -1,5 +1,3 @@
-use arrow::array::StringArray;
-//use arrow::compute::min;
 use arrow::util::pretty::pretty_format_batches;
 use clap::Parser;
 use color_eyre::eyre::{eyre, Report, Result};
@@ -9,20 +7,19 @@ use datafusion::prelude::*;
 use log;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use range_set_blaze::RangeSetBlaze;
 
-use crate::{read_csv, register_csv};
+use crate::register_csv;
 
 /// Names of columns with nextclade that contain ',' separate mutations
 pub const MUTATION_COLUMNS: &[&str] = &[
-    "substitutions", 
-    "deletions", 
-    "insertions", 
-    "frameShifts", 
-    "aaSubstitutions", 
-    "aaDeletions", 
-    "aaInsertions", 
-    "privateNucMutations.reversionSubstitutions"
+    "substitutions",
+    "deletions",
+    "insertions",
+    "frameShifts",
+    "aaSubstitutions",
+    "aaDeletions",
+    "aaInsertions",
+    //"privateNucMutations.reversionSubstitutions"
 ];
 
 pub const GENOME_LENGTH: u32 = 29903;
@@ -76,7 +73,7 @@ pub async fn annotate(args: &AnnotateArgs) -> Result<(), Report> {
 
     // Preview the first 10 records (or less)
     let batches = ctx.sql("SELECT * FROM annotations LIMIT 10").await?.collect().await?;
-    log::info!("batches:\n{}", pretty_format_batches(&batches)?.to_string());
+    log::info!("Annotations preview:\n{}", pretty_format_batches(&batches)?.to_string());
     // Check that the table is not empty
     if batches.len() == 0 { 
         return Err(eyre!("No annotations were found in file: {:?}", &args.annotations))
@@ -87,127 +84,157 @@ pub async fn annotate(args: &AnnotateArgs) -> Result<(), Report> {
 
     if let Some(nextclade_path) = &args.nextclade {
         log::info!("Reading nextclade file: {:?}", nextclade_path);
-        let name = "nextclade";
+        let name = "nextclade_raw";
     
         // Read in the nextclade tsv, registering it as for sql queries
         let ctx = register_csv(nextclade_path, ctx, delimiter, name).await?;
          // Select the nextclade table, check to make sure there are records, and display a preview.
 
         // Preview the first 10 records (or less)
-        let batches = ctx.sql("SELECT * FROM nextclade LIMIT 10").await?.collect().await?;
+        let batches = ctx.sql("SELECT * FROM nextclade_raw LIMIT 10").await?.collect().await?;
         // Check that the table is not empty
         if batches.len() == 0 { 
             return Err(eyre!("No nextclade records were found in file: {:?}", nextclade_path))
         }
 
-        // Create a table of missing data (long)
+        // --------------------------------------------------------------------
+        // Column Renaming and Type Conversion (Wide Dataframe)
+
+        // Extract only the columns we need, convert them all to UTF-8.
+        let select_options = vec!["seqName", "missing", "alignmentEnd"]
+            .iter()
+            .chain(MUTATION_COLUMNS)
+            .map(|column| format!("arrow_cast(nextclade_raw.\"{column}\", 'Utf8') as {column}"))
+            .collect::<Vec<_>>().join(",");
+
+        ctx.sql(&format!("CREATE TABLE nextclade AS SELECT {select_options} FROM nextclade_raw")).await?;
+
+        // Drop the raw table?
+        ctx.sql("DROP TABLE nextclade_raw").await?;
+
+        // --------------------------------------------------------------------
+        // Missing Data (Long Dataframe)
+
         // If the alignmentEnd field is null, consider the whole genome is missing
         ctx
             .sql(&format!("
                 CREATE TABLE missing AS
                 SELECT 
                     sample,
-                    CAST(split_part(missing, '-', 1) as int) as start,
-                    CAST(split_part(missing, '-', 2) as int) as stop
+                    arrow_cast(split_part(missing, '-', 1), 'Int32') as start,
+                    arrow_cast(split_part(missing, '-', 2), 'Int32') as stop
                 FROM
                     (SELECT
-                        nextclade.\"seqName\" as sample,
-                        unnest(string_to_array(nextclade.\"missing\", ',', '')) as missing
+                        seqName as sample,
+                        unnest(string_to_array(missing, ',', '')) as missing
                     FROM nextclade
 
                     UNION
 
                     SELECT 
-                        nextclade.\"seqName\" as sample,
+                        seqName as sample,
                         '1-{GENOME_LENGTH}' as missing
                     FROM nextclade
-                    WHERE nextclade.\"alignmentEnd\" IS NULL
+                    WHERE alignmentEnd IS NULL
                     )
+                ORDER BY sample,start,stop
             ")).await?;
-        let batches = ctx.sql("SELECT * FROM missing").await?.collect().await?;
-        log::info!("batches:\n{}", pretty_format_batches(&batches)?.to_string());
+        let batches = ctx.sql("SELECT * FROM missing LIMIT 10").await?.collect().await?;
+        log::info!("Missing preview:\n{}", pretty_format_batches(&batches)?.to_string());
+
+        // --------------------------------------------------------------------
+        // Mutations (Long Dataframe)
 
         // Create a table of mutations (long)
-        ctx
-            .sql("
-                CREATE TABLE mutations AS
-                (SELECT 
-                    nextclade.\"seqName\" as sample,
-                    'aaSubstitutions' as column,
-                    unnest(string_to_array(nextclade.\"aaSubstitutions\", ',', '')) as mutation
-                FROM nextclade
-                
-                UNION
+        let query = MUTATION_COLUMNS
+            .iter()
+            .map(|column| {
+                format!(
+                "SELECT 
+                    seqName as sample,
+                    '{column}' as column,
+                    unnest(string_to_array({column}, ',', '')) as mutation
+                FROM nextclade"
+                )
+            })
+        .collect::<Vec<_>>().join(" UNION ");
+        ctx.sql(&format!("CREATE TABLE mutations AS {query}")).await?;
+        let batches = ctx.sql("SELECT * FROM mutations LIMIT 10").await?.collect().await?;
+        log::info!("Mutations preview:\n{}", pretty_format_batches(&batches)?.to_string());
 
-                SELECT 
-                    nextclade.\"seqName\" as sample,
-                    'substitutions' as column,
-                    unnest(string_to_array(nextclade.\"substitutions\", ',', '')) as mutation
-                FROM nextclade
-                
-                ORDER BY sample,column,mutation)
-                "
-            ).await?;
+        // // --------------------------------------------------------------------
+        // //  Observed Annotated Mutations (Regex)
 
-        // Create a table of annotated mutations (long)
+        // ctx
+        //     .sql(
+        //         "CREATE TABLE regex_mutations AS
+        //         SELECT * FROM annotations WHERE column == 'regex'
+        //         "
+        //     ).await?;
+
+        // let batches = ctx.sql("SELECT * FROM regex_mutations LIMIT 10").await?.collect().await?;
+        // log::info!("Regex mutations preview:\n{}", pretty_format_batches(&batches)?.to_string());
+
+        // --------------------------------------------------------------------
+        //  Observed Annotated Mutations (Exact)
+
         ctx
             .sql(
                 "CREATE TABLE annotated_mutations AS
                 (
                     SELECT 
-                        mutations.sample,annotations.* 
+                        M.sample,'present' as status, A.* 
                     FROM 
-                        annotations INNER JOIN mutations ON annotations.mutation = mutations.mutation ORDER BY sample,start,stop
+                        annotations A INNER JOIN (SELECT * FROM mutations WHERE column != 'regex') M ON 
+                            (A.mutation = M.mutation AND A.column = M.column)
+                         ORDER BY sample,start,stop
                 )"
             ).await?;
             
-        let batches = ctx.sql("SELECT * FROM annotated_mutations").await?.collect().await?;
-        log::info!("batches:\n{}", pretty_format_batches(&batches)?.to_string());
+        let batches = ctx.sql("SELECT * FROM annotated_mutations LIMIT 10").await?.collect().await?;
+        log::info!("Annotated mutations preview:\n{}", pretty_format_batches(&batches)?.to_string());
 
-        // Identify missing mutations based on overlaps with missing ranges
+        // --------------------------------------------------------------------
+        // Missing Mutations (Long Dataframe)        
 
         // Create a table of missing annotated mutations (long)
+        // A mutation is considered missing if a missing range overlaps its
         ctx
             .sql(
                 "CREATE TABLE missing_mutations AS
-                (
-                    SELECT 
-                        missing.sample,annotations.* 
-                    FROM 
-                        annotations INNER JOIN missing ON annotations.start >= missing.start AND annotations.stop <= missing.stop
-                    ORDER BY
-                        sample,start,stop
-                )"
+                SELECT 
+                    missing.sample,'missing' as status, annotations.* 
+                FROM 
+                    annotations INNER JOIN missing ON 
+                        (missing.start >= annotations.start AND missing.stop <= annotations.stop) OR
+                        (missing.start <= annotations.start AND missing.stop >= annotations.start) OR
+                        (missing.start <= annotations.stop  AND missing.stop >= annotations.stop)
+                ORDER BY
+                    sample,start,stop
+                "
             ).await?;
 
-        let batches = ctx.sql("SELECT * FROM missing_mutations").await?.collect().await?;
-        log::info!("batches:\n{}", pretty_format_batches(&batches)?.to_string());
+        let batches = ctx.sql("SELECT * FROM missing_mutations LIMIT 10").await?.collect().await?;
+        log::info!("Missing mutations preview:\n{}", pretty_format_batches(&batches)?.to_string());
+
+        // --------------------------------------------------------------------
+        // Final Dataframe
 
         // Create the final table
         let df = ctx.sql("
-            SELECT *,'false' as missing FROM annotated_mutations
+            SELECT * FROM annotated_mutations
             UNION
-            SELECT *,'true' as missing FROM missing_mutations
+            SELECT * FROM missing_mutations
             ORDER BY sample,start,stop").await?;
 
-        let batches = df.clone().collect().await?;
-        log::info!("batches:\n{}", pretty_format_batches(&batches)?.to_string());            
+        let batches = df.clone().limit(0, Some(10))?.collect().await?;
+        log::info!("Final preview:\n{}", pretty_format_batches(&batches)?.to_string());            
             
         let write_options = DataFrameWriteOptions::default();
         let csv_options = CsvOptions::default().with_delimiter(b'\t');
-        let output =   "nextclade_annotated.tsv";      
+        let output = "nextclade_annotated.tsv";      
         df.write_csv(output, write_options, Some(csv_options)).await?;
     }
-
-     // a is the set of integers from 100 to 499 (inclusive) and 501 to 1000 (inclusive)
-    let a = RangeSetBlaze::from_iter([0..=50, 100..=200]);
-    log::info!("a: {a:?}");
-    // b is the set of integers -20 and the range 400 to 599 (inclusive)
-    let b = RangeSetBlaze::from_iter([10..=10, 40..=60]);
-    log::info!("b: {b:?}");
-    // c is the union of a and b, namely -20 and 100 to 999 (inclusive)
-    let c = a & b;
-    log::info!("c: {c:?}");
 
     Ok(())
 }
