@@ -30,7 +30,7 @@ async fn main() -> Result<(), Report> {
 
     // check which CLI command we're running (dataset, run, plot)
     match args.command {
-        Command::Annotate(args) => annotate(&args).await?,
+        Command::Annotate(args) => annotate(&args.annotations, &args.nextclade).await?,
         Command::Plot(args)     => plot(&args)?,
     }
 

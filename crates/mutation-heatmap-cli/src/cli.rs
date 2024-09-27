@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand };
-use mutation_heatmap::{AnnotateArgs, PlotArgs, Verbosity};
+use mutation_heatmap::{PlotArgs, Verbosity};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 /// The command-line interface (CLI).
 /// ---
@@ -50,4 +51,21 @@ pub enum Command {
 
     #[clap(about = "Plot mutations.")]
     Plot(PlotArgs),
+}
+
+/// Detect recombination in a dataset population and/or input alignment.
+#[derive(Clone, Debug, Deserialize, Serialize, Parser)]
+pub struct AnnotateArgs {
+
+    /// Input annotations tsv.
+    #[clap(help = "Input annotations tsv file.")]
+    #[clap(long)]
+    #[clap(required = true)]
+    pub annotations: PathBuf,    
+
+    /// Input nextclade tsv (mutually exclusive with --ivar).
+    #[clap(help = "Input nextclade tsv (mutually exclusive with --ivar)")]
+    #[clap(long)]
+    #[clap(required = true)]
+    pub nextclade: PathBuf,
 }

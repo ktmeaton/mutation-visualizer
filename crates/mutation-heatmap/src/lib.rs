@@ -15,7 +15,7 @@ pub mod annotate;
 pub mod plot;
 
 #[doc(inline)]
-pub use crate::annotate::{annotate, AnnotateArgs};
+pub use crate::annotate::annotate;
 pub use crate::plot::{plot, PlotArgs};
 
 #[derive(Clone, Debug, Default, Deserialize, EnumIter, Serialize, ValueEnum)]

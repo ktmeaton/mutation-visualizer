@@ -1,15 +1,15 @@
-mutation	column	start	stop	priority	citation	order
-C241T	substitutions	241	241	1	Author A et al. (XXXX) Excellent science paper.	1
-G9267T	substitutions	9267	9267	1	Author A et al. (XXXX) Excellent science paper.	2
-E:T9I	aaSubstitutions	26269	26271	1	Author A et al. (XXXX) Excellent science paper.	3
-ORF1a:S3001I	aaSubstitutions	9266	9268	1	Author A et al. (XXXX) Excellent science paper.	4
-6863-6865	deletions	6863	6865	1	Author B et al. (XXXX) More Excellent science.	5
-28933:T	insertions	28933	28933	2	Author B et al. (XXXX) More Excellent science.	6
-6513-6515	deletions	6513	6515	2	Author B et al. (XXXX) More Excellent science.	7
-ORF1a:4082-4401	frameShifts	12509	13468	2	Author B et al. (XXXX) More Excellent science.	8
-N:221-298	frameShifts	28934	29167	2	Author B et al. (XXXX) More Excellent science.	9
-N:368-371	frameShifts	29375	29386	2	Author B et al. (XXXX) More Excellent science.	10
-^(S:.*$)	regex	21563	25384	2	Author B et al. (XXXX) More Excellent science.	11
-A1T	substitutions	1	10	3	Missing data test 1.	12
-3900-4000	deletions	3900	4000	3	Missing data test 2.	13
-4800-4900	deletions	4800	4900	3	Missing data test 3.	14
+mutation	column	is_gene	start	stop	info	citation	order
+C241T	substitutions	false	241	241	Test nucleotide substitution.	Author A et al. (XXXX) Excellent science paper.	1
+G9267T	substitutions	false	9267	9267	Test nucleotide substitution.	Author A et al. (XXXX) Excellent science paper.	2
+E:T9I	aaSubstitutions	false	26269	26271	Test amino acid substitution.	Author A et al. (XXXX) Excellent science paper.	3
+ORF1a:S3001I	aaSubstitutions	false	9266	9268	Test amino acid substitution with letters and numbers in gene name.	Author A et al. (XXXX) Excellent science paper.	4
+6863-6865	deletions	false	6863	6865	Test nucleotide deletion.	Author B et al. (XXXX) More Excellent science.	5
+28933:T	insertions	false	28933	28933	Test nucleotide insertion.	Author B et al. (XXXX) More Excellent science.	6
+6513-6515	deletions	false	6513	6515	Test nucleotide deletion.	Author B et al. (XXXX) More Excellent science.	7
+ORF1a:4082-4401	frameShifts	false	12509	13468	Test amino acid frameshift.	Author B et al. (XXXX) More Excellent science.	8
+N:221-298	frameShifts	false	28934	29167	Test amino acid frameshift.	Author B et al. (XXXX) More Excellent science.	9
+N:368-371	frameShifts	false	29375	29386	Test amino acid frameshift.	Author B et al. (XXXX) More Excellent science.	10
+S	aaSubstitutions	true	21563	25384	Test get all amino acid substitutions in gene.	Author B et al. (XXXX) More Excellent science.	11
+A1T	substitutions	false	1	10	Test nucleotide substitution that should be marked as missing.	Missing data test 1.	12
+3900-4000	deletions	false	3900	4000	Test nucleotide deletion that should be marked as present?	Missing data test 2.	13
+4800-4900	deletions	false	4800	4900	Test nucleotide deletion that should be marked as missing?	Missing data test 3.	14
