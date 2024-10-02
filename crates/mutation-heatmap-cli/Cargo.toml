@@ -6,19 +6,21 @@ rust-version.workspace = true
 version.workspace = true
 
 [features]
-default = []
+default = ["plot"]
+plot = ["mutation-heatmap/plot"]
 
 [dependencies]
-chrono              = { workspace = true }
-clap                = { workspace = true }
-color-eyre          = { workspace = true }
-env_logger          = { workspace = true }
+chrono       = { version = "0.4",    default-features = false, features = ["clock", "serde"] }
+clap         = { version = "4.5.17", default-features = true, features = [ "derive", "string"] }
+color-eyre   = { workspace = true }
+env_logger   = { version = "0.11",   default-features = false }
 log                 = { workspace = true }
-mutation-heatmap    = { default-features = false, path = "../mutation-heatmap" }
-serde               = { workspace = true }
-strum               = { workspace = true }
-strum_macros        = { workspace = true }
-tokio               = { workspace = true }
+mutation-heatmap    = { default-features = false, path = "../mutation-heatmap"}
+serde        = { version = "1",      default-features = false, features = ["std", "derive"] }
+strum        = { version = "0.26",   default-features = false, features = ["derive"] }
+strum_macros = { version = "0.26",   default-features = false }
+thiserror    = { version = "1",      default-features = false }
+tokio        = { version = "1.40 ",  default-features = false, features = ["macros", "rt-multi-thread"] }
 
 [profile.dev]
 opt-level = 3

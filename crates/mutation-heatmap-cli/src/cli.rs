@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand };
-use mutation_heatmap::{PlotArgs, Verbosity};
+use crate::Verbosity;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -46,8 +46,8 @@ pub enum Command {
     /// let args = Cli::parse_from(input);
     /// matches!(args.command, Command::Dataset(_));
     /// ```
-    #[clap(about = "Annotate mutations.")]
-    Annotate(AnnotateArgs),
+    #[clap(about = "Extract mutations.")]
+    Extract(ExtractArgs),
 
     #[clap(about = "Plot mutations.")]
     Plot(PlotArgs),
@@ -55,17 +55,29 @@ pub enum Command {
 
 /// Detect recombination in a dataset population and/or input alignment.
 #[derive(Clone, Debug, Deserialize, Serialize, Parser)]
-pub struct AnnotateArgs {
+pub struct ExtractArgs {
 
-    /// Input annotations tsv.
-    #[clap(help = "Input annotations tsv file.")]
-    #[clap(long)]
-    #[clap(required = true)]
-    pub annotations: PathBuf,    
-
-    /// Input nextclade tsv (mutually exclusive with --ivar).
-    #[clap(help = "Input nextclade tsv (mutually exclusive with --ivar)")]
+    /// Input nextclade tsv.
+    #[clap(help = "This is created by the command nextclade run ... --output-tsv")]
     #[clap(long)]
     #[clap(required = true)]
     pub nextclade: PathBuf,
+
+    /// Input annotations gff from nextclade dataset.
+    #[clap(help = "This is the genome_annotations.gff3 that is provided with nextclade datasets.")]
+    #[clap(long)]
+    #[clap(required = true)]
+    pub gff: PathBuf
+}
+
+
+/// Detect recombination in a dataset population and/or input alignment.
+#[derive(Clone, Debug, Deserialize, Serialize, Parser)]
+pub struct PlotArgs {
+
+    /// Output file prefix.
+    #[clap(help = "Output file prefix.")]
+    #[clap(long)]
+    pub prefix: String,
+
 }

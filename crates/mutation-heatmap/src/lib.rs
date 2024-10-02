@@ -1,85 +1,29 @@
+use arrow::array::{StringArray, UInt32Array};
+use arrow::datatypes::DataType;
+use arrow::record_batch::RecordBatch;
 use color_eyre::eyre::{eyre, Report, Result};
-use color_eyre::Help;
-use clap::ValueEnum;
+use datafusion::arrow::datatypes::{Field, Schema};
+use datafusion::datasource::MemTable;
 use datafusion::prelude::*;
-use log::LevelFilter;
-use serde::{Deserialize, Serialize};
-use std::fmt::{Display, Formatter};
+use noodles::gff;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
-use strum_macros::EnumIter;
-use strum::IntoEnumIterator;
-use thiserror::Error;
+use std::io::BufReader;
+use std::sync::Arc;
 
-pub mod annotate;
+pub mod extract;
+#[cfg(feature = "plot")]
 pub mod plot;
 
 #[doc(inline)]
-pub use crate::annotate::annotate;
-pub use crate::plot::{plot, PlotArgs};
+pub use crate::extract::extract;
+#[cfg(feature = "plot")]
+pub use crate::plot::plot;
 
-#[derive(Clone, Debug, Default, Deserialize, EnumIter, Serialize, ValueEnum)]
-pub enum Verbosity {
-    Debug,
-    Error,
-    #[default]
-    Info,
-    Trace,
-    Warn
+#[derive(Copy, Clone, Debug)]
+pub enum OutputFormat {
+    Tsv,
+    Parquet
 }
-
-impl Display for Verbosity {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        // Convert to lowercase for RUST_LOG env var compatibility
-        let lowercase = format!("{:?}", self).to_lowercase();
-        write!(f, "{lowercase}")
-    }
-}
-
-impl Verbosity {
-    /// Convert Verbosity to log LevelFilter
-    pub fn to_levelfilter(self) -> log::LevelFilter {
-        match self {
-            Verbosity::Error => LevelFilter::Error,
-            Verbosity::Warn  => LevelFilter::Warn,
-            Verbosity::Info  => LevelFilter::Info,
-            Verbosity::Debug => LevelFilter::Debug,
-            Verbosity::Trace => LevelFilter::Trace,
-        }
-    }
-}
-
-impl FromStr for Verbosity {
-
-    type Err = Report;
-
-    /// Returns a [`Verbosity`] converted from a [`str`].
-    ///
-    /// ## Examples
-    ///
-    fn from_str(verbosity: &str) -> Result<Self, Self::Err> {
-        let verbosity = match verbosity {
-            "error" => Verbosity::Error,
-            "warn"  => Verbosity::Warn,
-            "info"  => Verbosity::Info,
-            "debug" => Verbosity::Debug,
-            "trace" => Verbosity::Trace,
-            _       => Err(eyre!("Unknown verbosity level: {verbosity}"))
-                        .suggestion(
-                            format!(
-                                "Please choose from: {:?}", 
-                                Verbosity::iter().map(|v| v.to_string()).collect::<Vec<String>>()
-                            ))?,
-        };
-
-        Ok(verbosity)
-    }
-}
-
-#[derive(Clone, Debug, Eq, Error, PartialEq)]
-#[error("Verbosity level {0} is unknown.")]
-pub struct UnknownVerbosityError(pub String);
-
 
 /// Light wrapper around datafusions register_csv.
 pub async fn register_csv<P,N>(path: &P, ctx: SessionContext, delimiter: Option<u8>, name: N) -> Result<SessionContext, Report>
@@ -147,4 +91,67 @@ where
     };
 
     Ok((path, ext, delimiter))
+}
+
+/// Light wrapper around noodles GFF reader and datafusion register.
+pub async fn register_gff<N, P>(path: P, ctx: SessionContext, name: N) -> Result<SessionContext, Report>
+where
+    P: AsRef<Path> + std::fmt::Debug,
+    N: ToString,
+{
+    log::info!("Reading gff file: {path:?}");
+
+    let input = std::fs::File::open(&path)?;
+    let buffered = BufReader::new(input);
+    let mut reader = gff::io::Reader::new(buffered);
+
+    // define the schema.
+    // example: https://github.com/apache/datafusion/blob/main/datafusion-examples/examples/simple_udaf.rs
+
+    let schema = Arc::new(Schema::new(vec![
+        Field::new("name",  DataType::Utf8,   false),
+        Field::new("type",  DataType::Utf8,   false),
+        Field::new("start", DataType::UInt32, false),
+        Field::new("end",   DataType::UInt32, false),
+    ]));
+
+    // Containers for the essential fields we need from the GFF
+    let mut names:  Vec<String> = Vec::new();
+    let mut types:  Vec<String> = Vec::new();
+    let mut starts: Vec<u32>    = Vec::new();
+    let mut ends:   Vec<u32>    = Vec::new();
+
+    // Search the attributes for these possible identifier names
+    // The sars-cov-2 gff has a strange space before " gene_name"
+    let name_attributes = vec!["Name", "gene_name", " gene_name", "gene"];
+
+    for result in reader.records() {
+        let record = result?;
+        let attributes = record.attributes();
+        for n in &name_attributes {
+            if let Some(name) = attributes.get(&n.to_string()) {
+                names.push(name.to_string());
+                types.push(record.ty().to_string());
+                starts.push(record.start().get() as u32);
+                ends.push(record.end().get() as u32);
+                break
+            }
+        }
+    }
+
+    let records = RecordBatch::try_new(
+        schema.clone(),
+        vec![
+            Arc::new(StringArray::from(names)),
+            Arc::new(StringArray::from(types)),
+            Arc::new(UInt32Array::from(starts)),
+            Arc::new(UInt32Array::from(ends)),
+        ],
+    )?;   
+
+    // declare a table in memory..
+    let provider = MemTable::try_new(schema, vec![vec![records]])?;
+    ctx.register_table(&name.to_string(), Arc::new(provider))?;
+
+    Ok(ctx)
 }

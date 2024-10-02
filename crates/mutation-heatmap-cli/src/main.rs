@@ -2,7 +2,7 @@ use chrono::Local;
 use clap::Parser;
 use color_eyre::eyre::{Report, Result};
 use env_logger::Builder;
-use mutation_heatmap::{annotate, plot};
+use mutation_heatmap::{extract, plot};
 use mutation_heatmap_cli::{Cli, Command};
 use std::io::Write;
 
@@ -30,8 +30,8 @@ async fn main() -> Result<(), Report> {
 
     // check which CLI command we're running (dataset, run, plot)
     match args.command {
-        Command::Annotate(args) => annotate(&args.annotations, &args.nextclade).await?,
-        Command::Plot(args)     => plot(&args)?,
+        Command::Extract(args) => extract(&args.nextclade, &args.gff).await?,
+        Command::Plot(args)    => plot(&args.prefix)?,
     }
 
     Ok(())

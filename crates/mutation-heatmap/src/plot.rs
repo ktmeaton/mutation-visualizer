@@ -1,10 +1,8 @@
-use clap::Parser;
+use base64::prelude::*;
 use color_eyre::eyre::{eyre, Result, Report};
-use serde::{Deserialize, Serialize};
 use svg::Document;
 use svg::node::element::{Path, Group, Text, Style};
 use svg::node::element::path::Data;
-use base64::prelude::*;
 use rand::Rng;
 use resvg::tiny_skia::Pixmap;
 use tiny_skia_path;
@@ -14,18 +12,12 @@ use usvg;
 pub const FONT_FAMILY: &str   = "Roboto";
 pub const FONT: &[u8] = include_bytes!("../../../assets/fonts/roboto/Roboto-Regular.ttf");
 
-/// Detect recombination in a dataset population and/or input alignment.
-#[derive(Clone, Debug, Deserialize, Serialize, Parser)]
-pub struct PlotArgs {
 
-    /// Output file prefix.
-    #[clap(help = "Output file prefix.")]
-    #[clap(long)]
-    pub prefix: String,
-
-}
-
-pub fn plot(args: &PlotArgs) -> Result<(), Report>{
+pub fn plot<P>(prefix: P) -> Result<(), Report>
+where
+    P: ToString
+{
+    let prefix = prefix.to_string();
 
     // ------------------------------------------------------------------------
     // Fonts
@@ -227,13 +219,13 @@ pub fn plot(args: &PlotArgs) -> Result<(), Report>{
         .add(mutation_boxes);
 
     // Render to vector graphics (svg)
-    svg::save(format!("{}.svg", &args.prefix), &document)?;
+    svg::save(format!("{}.svg", prefix), &document)?;
     // Render to pixels (png)
     let tree = usvg::Tree::from_str(&document.to_string(), &opt)?;
     let transform = tiny_skia_path::Transform::default();
     let mut pixmap = Pixmap::new(document_width, document_height).ok_or(eyre!("Failed to create png pixel map: {document_width}x{document_height}"))?;
     resvg::render(&tree, transform, &mut pixmap.as_mut());
-    pixmap.save_png(format!("{}.png", &args.prefix))?;
+    pixmap.save_png(format!("{}.png", prefix))?;
 
 
     Ok(())
