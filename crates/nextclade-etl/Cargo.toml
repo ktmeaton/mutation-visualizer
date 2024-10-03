@@ -1,0 +1,13 @@
+[package]
+name = "nextclade-etl"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+arrow      = { version = "53", default-features = false }
+datafusion = { version = "42", default-features = false }
+itertools  = { version = "0.13.0", default-features = false }
+tokio      = { version = "1.40 ",  default-features = false, features = ["macros", "rt-multi-thread"] }
+tempfile   = { version = "3.13.0", default-features = false}

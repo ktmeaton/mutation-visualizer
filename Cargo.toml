@@ -2,7 +2,7 @@
 resolver = "2"
 members = [
     "crates/mutation-heatmap"
-, "crates/mutation-heatmap-cli"]
+, "crates/mutation-heatmap-cli", "crates/nextclade-etl"]
 
 [workspace.package]
 edition = "2021"

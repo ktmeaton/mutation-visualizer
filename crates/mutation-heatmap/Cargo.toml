@@ -14,6 +14,7 @@ arrow          = { version = "53",     default-features = false,  optional = fal
 base64         = { version = "0.22.1", default-features = true,   optional = true  }
 color-eyre     = { workspace = true }
 datafusion     = { version = "42",     default-features = false,  optional = false, features = ["nested_expressions", "regex_expressions", "parquet"]  }
+deltalake      = { version = "0.20.1", default-features = false,  optional = false, features = ["datafusion"] }
 fontdb         = { version = "0.22.0", default-feature = true,    optional = true  }
 log            = { workspace = true }
 noodles        = { version = "0.83.0", default-features = false,  optional = false, features = ["gff"] }

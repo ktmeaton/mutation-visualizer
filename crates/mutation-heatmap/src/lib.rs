@@ -10,10 +10,13 @@ use std::path::{Path, PathBuf};
 use std::io::BufReader;
 use std::sync::Arc;
 
+pub mod convert;
 pub mod extract;
 #[cfg(feature = "plot")]
 pub mod plot;
 
+#[doc(inline)]
+pub use crate::convert::convert;
 #[doc(inline)]
 pub use crate::extract::extract;
 #[cfg(feature = "plot")]
